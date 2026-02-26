@@ -10,8 +10,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 // Initialize Replicate client
 // It automatically reads the REPLICATE_API_TOKEN from your environment
-const replicate = new Replicate();
-
+const replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN,
+});
 // --- Middleware ---
 app.use(cors());
 app.use(express.json());
