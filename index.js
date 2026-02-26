@@ -7,8 +7,7 @@ const Replicate = require('replicate');
 
 // Initialize Express app
 const app = express();
-const PORT = 3000;
-
+const PORT = process.env.PORT || 5000;
 // Initialize Replicate client
 // It automatically reads the REPLICATE_API_TOKEN from your environment
 const replicate = new Replicate();
@@ -99,6 +98,6 @@ app.post('/upload', upload.single('image'), async (req, res) => {
 
 
 // Start the server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on http://YOUR_IP_ADDRESS:${PORT}`);
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
