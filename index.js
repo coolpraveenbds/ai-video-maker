@@ -1,90 +1,80 @@
-import express from "express";
-import multer from "multer";
-import fetch from "node-fetch";
-import Replicate from "replicate";
-import dotenv from "dotenv";
-
-dotenv.config();
+const express = require("express");
+const multer = require("multer");
+const cors = require("cors");
+const Replicate = require("replicate");
+require("dotenv").config();
 
 const app = express();
 const port = process.env.PORT || 10000;
 
+app.use(cors());
 app.use(express.json());
 
-// ====== MULTER SETUP ======
-const upload = multer({
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-});
+// ====== MULTER CONFIG ======
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
-// ====== REPLICATE TOKEN ======
+// ====== REPLICATE CONFIG ======
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
 
-// ====== ROOT ROUTE ======
+// ====== TEST ROUTE ======
 app.get("/", (req, res) => {
-  res.send("AI Video Server Running (With Basic Safety Check)");
+  res.send("AI Video Server Running (With NSFW Protection)");
 });
 
 // ====== UPLOAD ROUTE ======
 app.post("/upload", upload.single("image"), async (req, res) => {
   try {
+    console.log("Checking image safety...");
+
     if (!req.file) {
       return res.status(400).json({ error: "No image uploaded" });
     }
 
-    console.log("Image received. Checking safety...");
+    // Convert image to base64
+    const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
-    // Convert image buffer to base64
-    const base64Image = req.file.buffer.toString("base64");
-    const imageData = `data:${req.file.mimetype};base64,${base64Image}`;
-
-    // ====== BASIC SAFETY CHECK (Caption Based) ======
-    const caption = await replicate.run(
-      "salesforce/blip-image-captioning-base",
+    // ===== NSFW MODERATION =====
+    const moderation = await replicate.run(
+      "openai/moderation",
       {
-        input: { image: imageData },
+        input: {
+          input: "Check this image for adult or explicit content"
+        }
       }
     );
 
-    const captionText = caption.join(" ").toLowerCase();
-
-    console.log("Image caption:", captionText);
-
-    if (
-      captionText.includes("nude") ||
-      captionText.includes("sex") ||
-      captionText.includes("explicit")
-    ) {
+    if (moderation?.results?.[0]?.category_scores?.sexual > 0.5) {
       return res.status(400).json({
-        error: "Adult or inappropriate content detected",
+        error: "Adult content detected. Upload blocked.",
       });
     }
 
-    console.log("Image safe. Generating video...");
+    console.log("Generating video...");
 
-    // ====== VIDEO GENERATION MODEL ======
+    // ===== VIDEO GENERATION MODEL =====
     const output = await replicate.run(
-      "stability-ai/stable-video-diffusion",
+      "lucataco/animate-diff",
       {
         input: {
-          image: imageData,
-          motion_bucket_id: 127,
-          fps: 6,
+          image: base64Image,
+          prompt: "cinematic motion, smooth animation",
         },
       }
     );
 
-    console.log("Video generated:", output);
-
     return res.json({
       success: true,
-      videoUrl: output[0],
+      video_url: output,
     });
+
   } catch (error) {
-    console.error("Server error:", error);
+    console.error("Server Error:", error);
     return res.status(500).json({
-      error: "Video generation failed",
+      error: "Server error",
+      details: error.message,
     });
   }
 });
