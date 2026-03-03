@@ -1,7 +1,7 @@
 {
   "name": "ai-video-maker",
   "version": "1.0.0",
-  "description": "AI Video Maker Backend",
+  "description": "AI Video Maker Backend with Seedance",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
