@@ -1,7 +1,4 @@
-FROM node:18-slim
-
-# Install ffmpeg for watermarking
-RUN apt-get update && apt-get install -y ffmpeg && apt-get clean
+FROM node:18
 
 WORKDIR /app
 
@@ -10,6 +7,9 @@ RUN npm install
 
 COPY . .
 
-EXPOSE 3000
+# install ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg
 
-CMD ["node", "index.js"]
+EXPOSE 10000
+
+CMD ["node","index.js"]
