@@ -1,18 +1,16 @@
+
 {
-  "name": "ai-video-maker",
+  "name": "ai-video-server",
   "version": "1.0.0",
-  "description": "AI Video Maker Backend with Seedance",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
-  },
-  "engines": {
-    "node": ">=18"
+    "start":"node index.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1",
-    "replicate": "^0.25.2"
+    "cors":"^2.8.5",
+    "express":"^4.18.2",
+    "multer":"^1.4.5",
+    "replicate":"^0.25.2",
+    "express-rate-limit":"^7.0.0"
   }
 }
