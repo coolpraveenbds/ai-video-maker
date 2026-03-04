@@ -5,6 +5,10 @@ import Replicate from "replicate"
 import rateLimit from "express-rate-limit"
 
 const app = express()
+
+app.set('trust proxy', 1)
+
+
 app.use(cors())
 
 const upload = multer({ dest: "uploads/" })
