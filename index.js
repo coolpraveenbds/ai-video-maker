@@ -1,165 +1,54 @@
-const express = require("express");
-const multer = require("multer");
-const cors = require("cors");
-const fs = require("fs");
-const path = require("path");
-const Replicate = require("replicate");
-const rateLimit = require("express-rate-limit");
-const { exec } = require("child_process");
+import express from "express"
+import cors from "cors"
+import multer from "multer"
+import Replicate from "replicate"
+import rateLimit from "express-rate-limit"
 
-const app = express();
-const PORT = process.env.PORT || 10000;
+const app = express()
+app.use(cors())
 
-app.use(cors());
-app.use(express.json());
-
-/* ---------------- RATE LIMIT ---------------- */
-
-const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5
-});
-
-app.use("/upload", limiter);
-
-/* ---------------- REPLICATE ---------------- */
+const upload = multer({ dest: "uploads/" })
 
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN
-});
+})
 
-/* ---------------- STORAGE ---------------- */
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10
+})
 
-const upload = multer({ storage: multer.memoryStorage() });
+app.use(limiter)
 
-/* ---------------- QUEUE ---------------- */
-
-let queue = [];
-let processing = false;
-
-async function processQueue() {
-
-  if (processing || queue.length === 0) return;
-
-  processing = true;
-
-  const job = queue.shift();
+app.post("/generate", upload.single("image"), async (req, res) => {
 
   try {
 
-    const base64Image =
-      `data:${job.file.mimetype};base64,${job.file.buffer.toString("base64")}`;
-
-    /* ----------- ADULT FILTER ----------- */
-
-    const nsfw = await replicate.run(
-      "salesforce/blip-image-captioning-base",
-      {
-        input: { image: base64Image }
-      }
-    );
-
-    const banned = ["nude","sex","porn","xxx"];
-
-    if (banned.some(w => nsfw.toString().toLowerCase().includes(w))) {
-      job.res.status(400).json({ error:"Adult content blocked" });
-      processing = false;
-      processQueue();
-      return;
-    }
-
-    /* -------- VIDEO GENERATION -------- */
-
     const output = await replicate.run(
-      "bytedance/seedance-1.0",
+      "bytedance/seedance-1-lite",
       {
         input: {
-          image: base64Image,
-          prompt: "cinematic motion",
+          prompt: "cinematic movement",
           duration: 5,
-          fps: 24,
-          resolution: "720p",
-          aspect_ratio: "16:9"
+          fps: 24
         }
       }
-    );
+    )
 
-    let videoUrl = output;
+    res.json({
+      video: output
+    })
 
-    /* -------- WATERMARK (FREE USERS) -------- */
+  } catch (error) {
 
-    if (job.watermark === "true") {
-
-      const tempInput = path.join(__dirname,"input.mp4");
-      const tempOutput = path.join(__dirname,"output.mp4");
-
-      const https = require("https");
-      const file = fs.createWriteStream(tempInput);
-
-      await new Promise(resolve=>{
-        https.get(videoUrl,res=>{
-          res.pipe(file);
-          file.on("finish",resolve);
-        });
-      });
-
-      const cmd = `ffmpeg -i ${tempInput} -vf "drawtext=text='AI Video Maker':x=10:y=10:fontsize=28:fontcolor=white" ${tempOutput}`;
-
-      await new Promise((resolve,reject)=>{
-        exec(cmd,(err)=>{
-          if(err) reject(err);
-          else resolve();
-        });
-      });
-
-      videoUrl = `${job.req.protocol}://${job.req.get("host")}/video`;
-
-      app.get("/video",(req,res)=>{
-        res.sendFile(tempOutput);
-      });
-
-    }
-
-    job.res.json({
-      success:true,
-      videoUrl:videoUrl
-    });
-
-  } catch(e) {
-
-    job.res.status(500).json({ error:e.message });
+    res.status(500).json({
+      error: error.message
+    })
 
   }
 
-  processing = false;
+})
 
-  processQueue();
-}
-
-/* ---------------- API ---------------- */
-
-app.post("/upload", upload.single("image"), (req,res)=>{
-
-  if(!req.file){
-    return res.status(400).json({ error:"No image uploaded" });
-  }
-
-  queue.push({
-    file:req.file,
-    res:res,
-    req:req,
-    watermark:req.body.watermark
-  });
-
-  processQueue();
-});
-
-/* ---------------- SERVER ---------------- */
-
-app.get("/",(req,res)=>{
-  res.send("AI Video Server Running");
-});
-
-app.listen(PORT,()=>{
-  console.log("Server running on port "+PORT);
-});
+app.listen(3000, () => {
+  console.log("Server running")
+})
