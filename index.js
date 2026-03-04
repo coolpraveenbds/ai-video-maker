@@ -11,26 +11,28 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize Replicate
-// Ensure REPLICATE_API_TOKEN is set in your Render Environment Variables
+// Make sure REPLICATE_API_TOKEN is set in your Render environment variables
 const replicate = new Replicate({
     auth: process.env.REPLICATE_API_TOKEN,
 });
 
-// --- Middleware & Directory Setup ---
-app.use(cors());
-app.use(express.json());
+// --- Setup Folders ---
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const WATERMARKED_DIR = path.join(__dirname, 'watermarked');
 
-const folders = ['uploads', 'watermarked'];
-folders.forEach(f => {
-    if (!fs.existsSync(f)) fs.mkdirSync(f);
+[UPLOADS_DIR, WATERMARKED_DIR].forEach(dir => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
-// Serve the watermarked videos folder publicly
-app.use('/videos', express.static(path.join(__dirname, 'watermarked')));
+// --- Middleware ---
+app.use(cors());
+app.use(express.json());
+// Serve watermarked videos publicly
+app.use('/videos', express.static(WATERMARKED_DIR));
 
-// Configure Multer for image uploads
+// Configure Multer for image storage
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/'),
+    destination: (req, file, cb) => cb(null, UPLOADS_DIR),
     filename: (req, file, cb) => cb(null, `input-${Date.now()}${path.extname(file.originalname)}`)
 });
 const upload = multer({ storage: storage });
@@ -50,7 +52,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     try {
         console.log("🛠 Processing request...");
         
-        // 1. Convert image to Data URI for Replicate
+        // 1. Convert image to Data URI for AI Processing
         const imageBuffer = await fs.promises.readFile(imagePath);
         const imageDataUri = `data:${req.file.mimetype};base64,${imageBuffer.toString("base64")}`;
 
@@ -67,37 +69,35 @@ app.post('/upload', upload.single('image'), async (req, res) => {
             return res.status(403).json({ error: "Banned: Inappropriate content detected." });
         }
 
-        // 3. Generate Video using Seedance 1.0
+        // 3. Generate Video using Bytedance Seedance 1.0
         console.log("🎬 Generating AI Video (Seedance 1.0)...");
         
-        // This is the stable identifier for Seedance 1.0 on Replicate
-        const modelIdentifier = "bytedance/seedance-1.0:7372274223363364451950346399432616894982";
-
+        // Using the base model name to avoid version hash errors
         const videoUrl = await replicate.run(
-            modelIdentifier,
+            "bytedance/seedance-1.0",
             { input: { input_image: imageDataUri } }
         );
 
         console.log("✅ AI Video Generated:", videoUrl);
 
-        // 4. Handle Premium vs Free
+        // 4. Handle Premium vs Free (No Watermark for Premium)
         if (!addWatermark) {
-            console.log("✨ Premium User: Returning original video URL.");
+            console.log("✨ Premium User: Returning direct link.");
             if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
             return res.json({ videoUrl: videoUrl });
         }
 
         // 5. Apply Watermark for Free Users
-        console.log("💧 Free User: Downloading and applying watermark...");
-        const tempVideoFile = `uploads/temp_${Date.now()}.mp4`;
+        console.log("💧 Free User: Applying Watermark...");
+        const tempVideoFile = path.join(UPLOADS_DIR, `temp_${Date.now()}.mp4`);
         const outputFileName = `vid_${Date.now()}.mp4`;
-        const finalOutputPath = `watermarked/${outputFileName}`;
+        const finalOutputPath = path.join(WATERMARKED_DIR, outputFileName);
 
         await downloadFile(videoUrl, tempVideoFile);
 
         const watermarkText = "AI Video Maker";
-        // FFmpeg command to place text in bottom right
-        const ffmpegCmd = `ffmpeg -i ${tempVideoFile} -vf "drawtext=text='${watermarkText}':x=W-tw-20:y=H-th-20:fontsize=24:fontcolor=white@0.5" -c:a copy ${finalOutputPath}`;
+        // FFmpeg command to add text watermark at bottom center
+        const ffmpegCmd = `ffmpeg -i "${tempVideoFile}" -vf "drawtext=text='${watermarkText}':x=(w-text_w)/2:y=H-th-20:fontsize=24:fontcolor=white@0.5" -c:a copy "${finalOutputPath}"`;
 
         exec(ffmpegCmd, (err) => {
             // Cleanup temp files
@@ -109,11 +109,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
                 return res.status(500).send("Watermark processing failed.");
             }
 
-            // Construct public URL for the watermarked video
-            const protocol = req.get('x-forwarded-proto') || 'http';
-            const host = req.get('host');
-            const publicUrl = `${protocol}://${host}/videos/${outputFileName}`;
-            
+            const publicUrl = `https://${req.get('host')}/videos/${outputFileName}`;
             console.log("🚀 Watermarked video ready:", publicUrl);
             res.json({ videoUrl: publicUrl });
         });
@@ -125,7 +121,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     }
 });
 
-// Helper: Download file from Replicate to local storage
+// Helper: Download file from Replicate
 function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
         const file = fs.createWriteStream(dest);
