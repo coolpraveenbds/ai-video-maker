@@ -1,11 +1,16 @@
-const express = require('express');
-const multer = require('multer');
-const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
-const { exec } = require('child_process');
-const https = require('https');
-const Replicate = require('replicate');
+import express from 'express';
+import multer from 'multer';
+import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import { exec } from 'child_process';
+import https from 'https';
+import Replicate from 'replicate';
+import { fileURLToPath } from 'url';
+
+// Fix for __dirname in ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +22,7 @@ const replicate = new Replicate({
 // --- Folder Setup ---
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const WATERMARKED_DIR = path.join(__dirname, 'watermarked');
+
 [UPLOADS_DIR, WATERMARKED_DIR].forEach(dir => {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
@@ -60,18 +66,16 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         // 2. Generate Video using Seedance 1-Lite
         console.log("🎬 Generating Video (bytedance/seedance-1-lite)...");
         
-        // Note: We use 'image' and 'prompt' keys as expected by the Lite model
         const output = await replicate.run(
             "bytedance/seedance-1-lite",
             { 
                 input: { 
                     image: imageDataUri,
-                    prompt: "natural movement, cinematic quality, high resolution" // Added prompt
+                    prompt: "natural movement, cinematic quality, high resolution"
                 } 
             }
         );
 
-        // Replicate sometimes returns an array of URLs, we take the first one
         const videoUrl = Array.isArray(output) ? output[0] : output;
         console.log("✅ AI Video URL:", videoUrl);
 
