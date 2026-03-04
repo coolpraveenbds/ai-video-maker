@@ -1,17 +1,16 @@
 {
   "name": "ai-video-server",
   "version": "1.0.0",
+  "description": "Backend for AI Video Maker App using Bytedance Seedance",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
     "cors": "^2.8.5",
+    "express": "^4.19.2",
     "multer": "^1.4.5-lts.1",
-    "replicate": "^0.25.2",
-    "express-rate-limit": "^7.0.0",
-    "node-fetch": "^3.3.2"
+    "replicate": "^0.34.1"
   }
 }
