@@ -20,7 +20,7 @@ const limiter = rateLimit({
 
 app.use(limiter)
 
-app.post("/generate", upload.single("image"), async (req, res) => {
+app.post("/upload", upload.single("image"), async (req, res) => {
 
   try {
 
