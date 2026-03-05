@@ -27,21 +27,23 @@ const replicate = new Replicate({
 let queue = [];
 let processing = false;
 
-function checkAdult(prompt) {
+function isAdult(text) {
 
   const banned = [
     "nude",
     "sex",
     "porn",
-    "naked",
+    "xxx",
     "adult",
-    "xxx"
+    "naked"
   ];
 
-  const text = prompt.toLowerCase();
+  const lower = text.toLowerCase();
 
   for (let word of banned) {
-    if (text.includes(word)) return true;
+    if (lower.includes(word)) {
+      return true;
+    }
   }
 
   return false;
@@ -73,20 +75,19 @@ async function processQueue() {
       }
     );
 
-    const videoUrl = output[0];
-
-    const watermarkedVideo =
-      videoUrl + "?watermark=AI-VIDEO-MAKER";
+    const videoUrl = Array.isArray(output) ? output[0] : output;
 
     job.res.json({
       status: "success",
-      video: watermarkedVideo
+      video: videoUrl
     });
 
-  } catch (err) {
+  } catch (error) {
+
+    console.log("Replicate error:", error);
 
     job.res.status(500).json({
-      error: err.message
+      error: error.message
     });
 
   }
@@ -108,7 +109,7 @@ app.post("/generate", upload.single("image"), async (req, res) => {
 
     const prompt = req.body.prompt || "cinematic camera movement";
 
-    if (checkAdult(prompt)) {
+    if (isAdult(prompt)) {
 
       return res.status(400).json({
         error: "Adult content detected"
@@ -127,10 +128,12 @@ app.post("/generate", upload.single("image"), async (req, res) => {
 
     processQueue();
 
-  } catch (err) {
+  } catch (error) {
+
+    console.log("Server error:", error);
 
     res.status(500).json({
-      error: err.message
+      error: error.message
     });
 
   }
