@@ -45,6 +45,7 @@ app.post("/generate", upload.single("image"), async (req, res) => {
       {
         input: {
           image: imageUrl
+          motion:"low"
         }
       }
     )
