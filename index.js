@@ -1,76 +1,61 @@
-import express from "express"
-import multer from "multer"
-import Replicate from "replicate"
-import cloudinary from "cloudinary"
-import fs from "fs"
+import express from 'express';
+import multer from 'multer';
+import cors from 'cors';
+import { v2 as cloudinary } from 'cloudinary';
+import Replicate from 'replicate';
+import dotenv from 'dotenv';
+import fs from 'fs';
 
-const app = express()
+dotenv.config();
 
-const upload = multer({ dest: "uploads/" })
+const app = express();
+const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
 
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN
-})
+// --- Cloudinary Config ---
+cloudinary.config({ 
+  cloud_name: 'dwan6rapc', 
+  api_key: '496517261156243', 
+  api_secret: 'NgLu4QK2J-nt8kBIeo14eA_aApI' 
+});
 
-cloudinary.v2.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-})
+app.use(cors());
+app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("AI Video Maker Backend Running")
-})
+const upload = multer({ dest: 'uploads/' });
 
-app.post("/generate", upload.single("image"), async (req, res) => {
+app.post('/generate', upload.single('image'), async (req, res) => {
+    if (!req.file) return res.status(400).send("No image.");
 
-  try {
+    try {
+        const imageBuffer = await fs.promises.readFile(req.file.path);
+        const imageDataUri = `data:${req.file.mimetype};base64,${imageBuffer.toString("base64")}`;
 
-    if (!req.file) {
-      return res.status(400).json({ error: "No image uploaded" })
-    }
-
-    console.log("Uploading image...")
-
-    const uploadResult = await cloudinary.v2.uploader.upload(
-      req.file.path,
-      { resource_type: "image" }
-    )
-
-    const imageUrl = uploadResult.secure_url
-
-    fs.unlinkSync(req.file.path)
-
-    console.log("Generating video...")
-
-    const output = await replicate.run(
-      "bytedance/seedance-1-lite",
-      {
-        input: {
-          image: imageUrl,
-          prompt: "portrait cinematic motion video"
+        // 1. Adult Content Filter
+        const safety = await replicate.run("replicate/safety-checker:e5d171ccca2161d2e2c948678ffae63cc2e240c9a69ef9a7f7293f39c110bc5e", { input: { image: imageDataUri } });
+        if (safety.nsfw_detected) {
+            fs.unlinkSync(req.file.path);
+            return res.status(403).json({ error: "Inappropriate content detected." });
         }
-      }
-    )
 
-    res.json({
-      video: output
-    })
+        // 2. Generate Video
+        const output = await replicate.run("bytedance/seedance-1.0", { input: { input_image: imageDataUri } });
+        const rawVideoUrl = Array.isArray(output) ? output[0] : output;
 
-  } catch (error) {
+        // 3. Upload to Cloudinary (Applying Watermark if needed)
+        // Note: For real watermarking on Cloudinary, you use 'transformation'
+        const uploadResponse = await cloudinary.uploader.upload(rawVideoUrl, {
+            resource_type: "video",
+            transformation: [
+                { overlay: { font_family: "Arial", font_size: 30, text: "AI Video Maker" }, gravity: "south_east", y: 20, x: 20, color: "white", opacity: 50 }
+            ]
+        });
 
-    console.log("ERROR:", error)
+        fs.unlinkSync(req.file.path);
+        res.json({ video: uploadResponse.secure_url });
 
-    res.status(500).json({
-      error: "Video generation failed"
-    })
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
-  }
-
-})
-
-const PORT = process.env.PORT || 10000
-
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT)
-})
+app.listen(3000, () => console.log("Server Live 🚀"));
