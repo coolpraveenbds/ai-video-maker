@@ -14,10 +14,9 @@ const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
 // --- Cloudinary Configuration ---
 // Set these in your Render Dashboard -> Environment tab
 cloudinary.config({ 
-  cloud_name: process.env.'dwan6rapc', 
-  api_key: process.'env496517261156243'., 
-  api_secret: process.env.'NgLu4QK2J-nt8kBIeo14eA_aApI' 
-
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+  api_key: process.env.CLOUDINARY_API_KEY, 
+  api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
 app.use(cors());
