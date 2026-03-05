@@ -1,15 +1,16 @@
 {
-  "name": "ai-video-maker",
+  "name": "ai-video-maker-backend",
   "version": "1.0.0",
+  "description": "ai video maker backend",
   "type": "module",
   "main": "index.js",
-  "dependencies": {
-    "cloudinary": "^1.41.0",
-    "express": "^4.18.2",
-    "multer": "^1.4.5",
-    "replicate": "^0.25.2"
-  },
   "scripts": {
     "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "1.4.5-lts.1",
+    "replicate": "^0.25.2",
+    "cloudinary": "^1.41.0"
   }
 }
