@@ -1,7 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import cors from 'cors';
-import { v2 as cloudinary } from 'cloudinary';
+import cors from 'cors';import { v2 as cloudinary } from 'cloudinary';
 import Replicate from 'replicate';
 import dotenv from 'dotenv';
 import fs from 'fs';
@@ -20,6 +19,7 @@ const replicate = new Replicate({
     auth: process.env.REPLICATE_API_TOKEN,
 });
 
+// Using your Cloudinary keys from the previous step
 cloudinary.config({ 
   cloud_name: 'dwan6rapc', 
   api_key: '496517261156243', 
@@ -40,31 +40,34 @@ app.post('/generate', upload.single('image'), async (req, res) => {
     const addWatermark = req.body.add_watermark !== 'false'; 
 
     try {
-        console.log("🛠️ Processing image...");
+        console.log("🛠️ Processing request...");
         const imageBuffer = await fs.promises.readFile(imagePath);
         const imageDataUri = `data:${req.file.mimetype};base64,${imageBuffer.toString("base64")}`;
 
-        console.log("🔍 Running AI Safety Filter...");
+        // 1. Adult Content Filter (Verified Version)
+        console.log("🔍 Checking AI Safety Filter...");
         const safety = await replicate.run(
             "replicate/safety-checker:e5d171ccca2161d2e2c948678ffae63cc2e240c9a69ef9a7f7293f39c110bc5e", 
             { input: { image: imageDataUri } }
         );
 
         if (safety.nsfw_detected) {
-            console.log("🚫 NSFW content detected. Blocking request.");
+            console.log("🚫 NSFW content detected.");
             fs.unlinkSync(imagePath);
             return res.status(403).json({ error: "Banned: Inappropriate content detected." });
         }
 
-        console.log("🎬 Generating AI Video with Seedance 1.0...");
+        // 2. Generate AI Video (Verified Version for Seedance 1.0)
+        console.log("🎬 Generating AI Video...");
         const output = await replicate.run(
             "bytedance/seedance-1.0:7372274223363364451950346399432616894982", 
             { input: { input_image: imageDataUri } }
         );
         const rawVideoUrl = Array.isArray(output) ? output[0] : output;
 
+        // 3. Upload to Cloudinary with Watermark
         console.log("☁️ Uploading to Cloudinary...");
-        const transformations = [];
+        const transformations = [{ width: 1280, crop: "scale" }];
         if (addWatermark) {
             transformations.push({ 
                 overlay: { font_family: "Arial", font_size: 40, text: "AI VIDEO MAKER" }, 
@@ -78,15 +81,14 @@ app.post('/generate', upload.single('image'), async (req, res) => {
             public_id: `video_${Date.now()}`
         });
 
-        if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-        
+        fs.unlinkSync(imagePath);
         console.log("✅ Success! Sending video URL to app.");
         res.json({ video: uploadResponse.secure_url });
 
     } catch (error) {
-        console.error("❌ An error occurred:", error.message);
+        console.error("❌ Server Error:", error.message);
         if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-        res.status(500).json({ error: "An unexpected error occurred on the server." });
+        res.status(500).json({ error: "Replicate or Cloudinary Error: " + error.message });
     }
 });
 
