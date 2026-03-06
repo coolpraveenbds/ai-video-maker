@@ -1,19 +1,13 @@
-FROM node:18-slim
-
-RUN apt-get update && \
-    apt-get install -y ffmpeg && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+FROM node:20
 
 WORKDIR /app
 
 COPY package*.json ./
+
 RUN npm install
 
 COPY . .
 
-RUN mkdir -p uploads watermarked
+EXPOSE 10000
 
-EXPOSE 3000
-
-CMD ["node", "index.js"]
+CMD ["node","index.js"]
