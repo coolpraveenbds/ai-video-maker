@@ -44,7 +44,6 @@ app.post('/generate', upload.single('image'), async (req, res) => {
         const imageBuffer = await fs.promises.readFile(imagePath);
         const imageDataUri = `data:${req.file.mimetype};base64,${imageBuffer.toString("base64")}`;
 
-        // 1. Safety Filter (Specific Version to avoid 404)
         console.log("🔍 Running AI Safety Filter...");
         const safety = await replicate.run(
             "replicate/safety-checker:e5d171ccca2161d2e2c948678ffae63cc2e240c9a69ef9a7f7293f39c110bc5e", 
@@ -52,22 +51,20 @@ app.post('/generate', upload.single('image'), async (req, res) => {
         );
 
         if (safety.nsfw_detected) {
-            console.log("🚫 NSFW content detected.");
+            console.log("🚫 NSFW content detected. Blocking request.");
             fs.unlinkSync(imagePath);
             return res.status(403).json({ error: "Banned: Inappropriate content detected." });
         }
 
-        // 2. Generate Video (Bytedance Seedance 1.0)
-        console.log("🎬 Generating AI Video...");
+        console.log("🎬 Generating AI Video with Seedance 1.0...");
         const output = await replicate.run(
             "bytedance/seedance-1.0:7372274223363364451950346399432616894982", 
             { input: { input_image: imageDataUri } }
         );
         const rawVideoUrl = Array.isArray(output) ? output[0] : output;
 
-        // 3. Upload to Cloudinary with Watermark
         console.log("☁️ Uploading to Cloudinary...");
-        const transformations = [{ width: 1280, crop: "scale" }];
+        const transformations = [];
         if (addWatermark) {
             transformations.push({ 
                 overlay: { font_family: "Arial", font_size: 40, text: "AI VIDEO MAKER" }, 
@@ -77,17 +74,19 @@ app.post('/generate', upload.single('image'), async (req, res) => {
 
         const uploadResponse = await cloudinary.uploader.upload(rawVideoUrl, {
             resource_type: "video",
-            transformation: transformations
+            transformation: transformations,
+            public_id: `video_${Date.now()}`
         });
 
-        fs.unlinkSync(imagePath);
-        console.log("✅ Video Ready!");
+        if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+        
+        console.log("✅ Success! Sending video URL to app.");
         res.json({ video: uploadResponse.secure_url });
 
     } catch (error) {
-        console.error("❌ Server Error:", error.message);
+        console.error("❌ An error occurred:", error.message);
         if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "An unexpected error occurred on the server." });
     }
 });
 
