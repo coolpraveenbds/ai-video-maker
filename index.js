@@ -4,7 +4,6 @@ import cors from "cors"
 import Replicate from "replicate"
 import dotenv from "dotenv"
 import fs from "fs"
-import cloudinary from "cloudinary"
 
 dotenv.config()
 
@@ -16,83 +15,85 @@ app.use(express.json())
 
 const PORT = process.env.PORT || 10000
 
-// Replicate API
 const replicate = new Replicate({
- auth: process.env.REPLICATE_API_TOKEN
+  auth: process.env.REPLICATE_API_TOKEN
 })
 
-// Cloudinary setup
-cloudinary.v2.config({
- cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
- api_key: process.env.CLOUDINARY_API_KEY,
- api_secret: process.env.CLOUDINARY_API_SECRET
-})
-
-// Server test
 app.get("/", (req, res) => {
- res.send("AI Video Maker Server Running 🚀")
+  res.send("AI Video Maker Server Running 🚀")
 })
 
-// Generate video
 app.post("/generate", upload.single("image"), async (req, res) => {
 
- try {
+  try {
 
-  if (!req.file) {
-   return res.status(400).json({ error: "No image uploaded" })
-  }
-
-  console.log("Image received")
-
-  const imageBuffer = fs.readFileSync(req.file.path)
-
-  const base64Image =
-   "data:" + req.file.mimetype + ";base64," + imageBuffer.toString("base64")
-
-  console.log("Generating AI Video...")
-
-  const output = await replicate.run(
-   "minimax/video-01",
-   {
-    input: {
-     prompt: "portrait cinematic motion",
-     image: base64Image
+    if (!req.file) {
+      return res.status(400).json({ error: "No image uploaded" })
     }
-   }
-  )
 
-  const videoUrl = Array.isArray(output) ? output[0] : output
+    console.log("Image received")
 
-  console.log("Video generated:", videoUrl)
+    const imageBuffer = fs.readFileSync(req.file.path)
 
-  // Upload video to Cloudinary
-  const uploadResult = await cloudinary.v2.uploader.upload(videoUrl, {
-   resource_type: "video",
-   public_id: "ai_video_" + Date.now()
-  })
+    const base64Image =
+      "data:" + req.file.mimetype + ";base64," + imageBuffer.toString("base64")
 
-  const finalVideo = uploadResult.secure_url
+    console.log("Starting AI generation")
 
-  console.log("Cloudinary video:", finalVideo)
+    const prediction = await replicate.predictions.create({
+      model: "minimax/video-01",
+      input: {
+        prompt: "portrait cinematic motion",
+        image: base64Image
+      }
+    })
 
-  fs.unlinkSync(req.file.path)
+    let result = prediction
 
-  res.json({
-   video: finalVideo
-  })
+    while (result.status !== "succeeded" && result.status !== "failed") {
 
- } catch (error) {
+      await new Promise(resolve => setTimeout(resolve, 3000))
 
-  console.log("Server error:", error.message)
+      result = await replicate.predictions.get(result.id)
 
-  res.status(500).json({
-   error: error.message
-  })
+      console.log("Status:", result.status)
 
- }
+    }
+
+    if (result.status === "failed") {
+
+      console.log("AI generation failed")
+
+      return res.status(500).json({
+        error: "Video generation failed"
+      })
+
+    }
+
+    const videoUrl = result.output[0]
+
+    console.log("Video generated:", videoUrl)
+
+    fs.unlinkSync(req.file.path)
+
+    res.json({
+      video: videoUrl
+    })
+
+  } catch (error) {
+
+    console.log("Server error:", error)
+
+    res.status(500).json({
+      error: "Server error"
+    })
+
+  }
 
 })
 
 app.listen(PORT, () => {
- console.log("Server running on port " + PORT)
+
+  console.log("Server running on port " + PORT)
+
 })
