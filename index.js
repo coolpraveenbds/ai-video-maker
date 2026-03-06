@@ -16,84 +16,89 @@ app.use(express.json())
 const PORT = process.env.PORT || 10000
 
 const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN
+ auth: process.env.REPLICATE_API_TOKEN
 })
 
+// Test route
 app.get("/", (req, res) => {
-  res.send("AI Video Maker Server Running 🚀")
+ res.send("AI Video Maker Server Running 🚀")
 })
 
+// Generate AI video
 app.post("/generate", upload.single("image"), async (req, res) => {
 
-  try {
+ try {
 
-    if (!req.file) {
-      return res.status(400).json({ error: "No image uploaded" })
-    }
+  if (!req.file) {
+   return res.status(400).json({ error: "No image uploaded" })
+  }
 
-    console.log("Image received")
+  console.log("Image received")
 
-    const imageBuffer = fs.readFileSync(req.file.path)
+  const imageBuffer = fs.readFileSync(req.file.path)
 
-    const base64Image =
-      "data:" + req.file.mimetype + ";base64," + imageBuffer.toString("base64")
+  const base64Image =
+   "data:" + req.file.mimetype + ";base64," + imageBuffer.toString("base64")
 
-    console.log("Starting AI generation")
+  console.log("Starting AI generation")
 
-    const prediction = await replicate.predictions.create({
-      model: "minimax/video-01",
-      input: {
-        prompt: "portrait cinematic motion",
-        image: base64Image
-      }
-    })
+  const prediction = await replicate.predictions.create({
+   model: "minimax/video-01",
+   input: {
+    prompt: "portrait cinematic motion",
+    image: base64Image
+   }
+  })
 
-    let result = prediction
+  let result = prediction
 
-    while (result.status !== "succeeded" && result.status !== "failed") {
+  while (result.status !== "succeeded" && result.status !== "failed") {
 
-      await new Promise(resolve => setTimeout(resolve, 3000))
+   await new Promise(resolve => setTimeout(resolve, 3000))
 
-      result = await replicate.predictions.get(result.id)
+   result = await replicate.predictions.get(result.id)
 
-      console.log("Status:", result.status)
-
-    }
-
-    if (result.status === "failed") {
-
-      console.log("AI generation failed")
-
-      return res.status(500).json({
-        error: "Video generation failed"
-      })
-
-    }
-
-    const videoUrl = result.output[0]
-
-    console.log("Video generated:", videoUrl)
-
-    fs.unlinkSync(req.file.path)
-
-    res.json({
-      video: videoUrl
-    })
-
-  } catch (error) {
-
-    console.log("Server error:", error)
-
-    res.status(500).json({
-      error: "Server error"
-    })
+   console.log("Status:", result.status)
 
   }
+
+  if (result.status === "failed") {
+
+   console.log("Generation failed")
+
+   return res.status(500).json({
+    error: "AI video generation failed"
+   })
+
+  }
+
+  const videoUrl = Array.isArray(result.output)
+   ? result.output[0]
+   : result.output
+
+  console.log("Video generated:", videoUrl)
+
+  fs.unlinkSync(req.file.path)
+
+  res.json({
+   status: "success",
+   video_url: videoUrl
+  })
+
+ } catch (error) {
+
+  console.log("Server error:", error)
+
+  res.status(500).json({
+   error: "Server error"
+  })
+
+ }
 
 })
 
 app.listen(PORT, () => {
 
-  console.log("Server running on port " + PORT)
+ console.log("Server running on port " + PORT)
 
 })
