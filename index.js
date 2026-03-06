@@ -33,10 +33,12 @@ app.post("/generate", upload.single("image"), async (req, res) => {
   try {
 
     if (!req.file) {
-      return res.status(400).json({ error: "No image uploaded" });
+      return res.status(400).json({
+        error: "No image uploaded"
+      });
     }
 
-    console.log("Uploading image to Cloudinary...");
+    console.log("📤 Uploading image to Cloudinary...");
 
     const uploadResult = await cloudinary.uploader.upload(
       req.file.path,
@@ -45,23 +47,25 @@ app.post("/generate", upload.single("image"), async (req, res) => {
 
     const imageUrl = uploadResult.secure_url;
 
+    console.log("Image URL:", imageUrl);
+
     fs.unlinkSync(req.file.path);
 
-    console.log("Generating video using Seedance...");
+    console.log("🎬 Generating AI video...");
 
     const output = await replicate.run(
       "bytedance/seedance-1-lite",
       {
         input: {
           image: imageUrl,
-          prompt: "cinematic motion video"
+          prompt: "cinematic motion portrait video"
         }
       }
     );
 
     const videoUrl = Array.isArray(output) ? output[0] : output;
 
-    console.log("Video generated:", videoUrl);
+    console.log("Video URL:", videoUrl);
 
     res.json({
       video: videoUrl
@@ -69,7 +73,8 @@ app.post("/generate", upload.single("image"), async (req, res) => {
 
   } catch (error) {
 
-    console.log("SERVER ERROR:", error);
+    console.log("❌ SERVER ERROR:");
+    console.log(error);
 
     res.status(500).json({
       error: error.message
@@ -82,5 +87,5 @@ app.post("/generate", upload.single("image"), async (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log("🚀 Server running on port", PORT);
 });
