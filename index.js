@@ -1,95 +1,104 @@
-import express from 'express';
-import multer from 'multer';
-import cors from 'cors';import { v2 as cloudinary } from 'cloudinary';
-import Replicate from 'replicate';
-import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import express from "express";
+import multer from "multer";
+import cors from "cors";
+import Replicate from "replicate";
+import { v2 as cloudinary } from "cloudinary";
+import fs from "fs";
+import dotenv from "dotenv";
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_TOKEN,
-});
-
-// Using your Cloudinary keys from the previous step
-cloudinary.config({ 
-  cloud_name: 'dwan6rapc', 
-  api_key: '496517261156243', 
-  api_secret: 'NgLu4QK2J-mt8kBTeo14eA_aApI' 
-});
-
 app.use(cors());
 app.use(express.json());
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: "uploads/" });
 
-app.get('/', (req, res) => res.send("AI Video Maker Server is Live 🚀"));
-
-app.post('/generate', upload.single('image'), async (req, res) => {
-    if (!req.file) return res.status(400).send("No image provided.");
-
-    const imagePath = req.file.path;
-    const addWatermark = req.body.add_watermark !== 'false'; 
-
-    try {
-        console.log("🛠️ Processing request...");
-        const imageBuffer = await fs.promises.readFile(imagePath);
-        const imageDataUri = `data:${req.file.mimetype};base64,${imageBuffer.toString("base64")}`;
-
-        // 1. Adult Content Filter (Verified Version)
-        console.log("🔍 Checking AI Safety Filter...");
-        const safety = await replicate.run(
-            "replicate/safety-checker:e5d171ccca2161d2e2c948678ffae63cc2e240c9a69ef9a7f7293f39c110bc5e", 
-            { input: { image: imageDataUri } }
-        );
-
-        if (safety.nsfw_detected) {
-            console.log("🚫 NSFW content detected.");
-            fs.unlinkSync(imagePath);
-            return res.status(403).json({ error: "Banned: Inappropriate content detected." });
-        }
-
-        // 2. Generate AI Video (Verified Version for Seedance 1.0)
-        console.log("🎬 Generating AI Video...");
-        const output = await replicate.run(
-            "bytedance/seedance-1.0:7372274223363364451950346399432616894982", 
-            { input: { input_image: imageDataUri } }
-        );
-        const rawVideoUrl = Array.isArray(output) ? output[0] : output;
-
-        // 3. Upload to Cloudinary with Watermark
-        console.log("☁️ Uploading to Cloudinary...");
-        const transformations = [{ width: 1280, crop: "scale" }];
-        if (addWatermark) {
-            transformations.push({ 
-                overlay: { font_family: "Arial", font_size: 40, text: "AI VIDEO MAKER" }, 
-                gravity: "south_east", y: 30, x: 30, color: "white", opacity: 60 
-            });
-        }
-
-        const uploadResponse = await cloudinary.uploader.upload(rawVideoUrl, {
-            resource_type: "video",
-            transformation: transformations,
-            public_id: `video_${Date.now()}`
-        });
-
-        fs.unlinkSync(imagePath);
-        console.log("✅ Success! Sending video URL to app.");
-        res.json({ video: uploadResponse.secure_url });
-
-    } catch (error) {
-        console.error("❌ Server Error:", error.message);
-        if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-        res.status(500).json({ error: "Replicate or Cloudinary Error: " + error.message });
-    }
+const replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN,
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 AI Server active on port ${PORT}`));
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+app.get("/", (req, res) => {
+  res.send("AI Video Maker Server is Live 🚀");
+});
+
+app.post("/generate", upload.single("image"), async (req, res) => {
+  try {
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No image uploaded" });
+    }
+
+    console.log("📤 Uploading image to Cloudinary...");
+
+    const imageUpload = await cloudinary.uploader.upload(req.file.path, {
+      resource_type: "image",
+    });
+
+    const imageUrl = imageUpload.secure_url;
+
+    fs.unlinkSync(req.file.path);
+
+    console.log("🎬 Generating video with Seedance...");
+
+    const output = await replicate.run(
+      "bytedance/seedance-1-lite",
+      {
+        input: {
+          image: imageUrl,
+          prompt: "cinematic portrait motion video"
+        },
+      }
+    );
+
+    const videoUrl = Array.isArray(output) ? output[0] : output;
+
+    console.log("☁️ Uploading video to Cloudinary...");
+
+    const videoUpload = await cloudinary.uploader.upload(videoUrl, {
+      resource_type: "video",
+      public_id: "ai_video_" + Date.now(),
+      transformation: [
+        { width: 1280, crop: "scale" },
+        {
+          overlay: {
+            font_family: "Arial",
+            font_size: 40,
+            text: "AI VIDEO MAKER"
+          },
+          gravity: "south_east",
+          x: 20,
+          y: 20,
+          opacity: 70
+        }
+      ]
+    });
+
+    console.log("✅ Video generated successfully");
+
+    res.json({
+      video: videoUpload.secure_url
+    });
+
+  } catch (error) {
+
+    console.error("❌ ERROR:", error);
+
+    res.status(500).json({
+      error: error.message
+    });
+
+  }
+});
+
+const PORT = process.env.PORT || 10000;
+
+app.listen(PORT, () => {
+  console.log("🚀 Server running on port", PORT);
+});
