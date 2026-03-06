@@ -1,91 +1,104 @@
-import express from "express";
-import multer from "multer";
-import cors from "cors";
-import Replicate from "replicate";
-import { v2 as cloudinary } from "cloudinary";
-import dotenv from "dotenv";
-import fs from "fs";
+import express from "express"
+import multer from "multer"
+import cors from "cors"
+import Replicate from "replicate"
+import dotenv from "dotenv"
+import fs from "fs"
+import cloudinary from "cloudinary"
 
-dotenv.config();
+dotenv.config()
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const app = express()
+const upload = multer({ dest: "uploads/" })
 
-const upload = multer({ dest: "uploads/" });
+app.use(cors())
+app.use(express.json())
 
+const PORT = process.env.PORT || 10000
+
+// Replicate API
 const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN
-});
+ auth: process.env.REPLICATE_API_TOKEN
+})
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Cloudinary
+cloudinary.v2.config({
+ cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+ api_key: process.env.CLOUDINARY_API_KEY,
+ api_secret: process.env.CLOUDINARY_API_SECRET
+})
 
+// Server test route
 app.get("/", (req, res) => {
-  res.send("AI Video Maker Server is Live 🚀");
-});
 
+ res.send("AI Video Maker Server is Live 🚀")
+
+})
+
+// Generate video route
 app.post("/generate", upload.single("image"), async (req, res) => {
 
-  try {
+ try {
 
-    if (!req.file) {
-      return res.status(400).json({
-        error: "No image uploaded"
-      });
-    }
-
-    console.log("📤 Uploading image to Cloudinary...");
-
-    const uploadResult = await cloudinary.uploader.upload(
-      req.file.path,
-      { resource_type: "image" }
-    );
-
-    const imageUrl = uploadResult.secure_url;
-
-    console.log("Image URL:", imageUrl);
-
-    fs.unlinkSync(req.file.path);
-
-    console.log("🎬 Generating AI video...");
-
-    const output = await replicate.run(
-      "bytedance/seedance-1-lite",
-      {
-        input: {
-          image: imageUrl,
-          prompt: "cinematic motion portrait video"
-        }
-      }
-    );
-
-    const videoUrl = Array.isArray(output) ? output[0] : output;
-
-    console.log("Video URL:", videoUrl);
-
-    res.json({
-      video: videoUrl
-    });
-
-  } catch (error) {
-
-    console.log("❌ SERVER ERROR:");
-    console.log(error);
-
-    res.status(500).json({
-      error: error.message
-    });
-
+  if (!req.file) {
+   return res.status(400).json({ error: "No image uploaded" })
   }
 
-});
+  console.log("Image received")
 
-const PORT = process.env.PORT || 10000;
+  const imageBuffer = fs.readFileSync(req.file.path)
+
+  const base64Image =
+   "data:" + req.file.mimetype + ";base64," + imageBuffer.toString("base64")
+
+  // AI video generation
+  console.log("Generating AI Video...")
+
+  const output = await replicate.run(
+   "bytedance/seedance-1.0:7372274223363364451950346399432616894982",
+   {
+    input: {
+     input_image: base64Image
+    }
+   }
+  )
+
+  const videoUrl = Array.isArray(output) ? output[0] : output
+
+  console.log("Video generated:", videoUrl)
+
+  // Upload video to Cloudinary
+  console.log("Uploading video to Cloudinary...")
+
+  const uploadResult = await cloudinary.v2.uploader.upload(videoUrl, {
+   resource_type: "video",
+   public_id: "ai_video_" + Date.now()
+  })
+
+  const finalVideo = uploadResult.secure_url
+
+  fs.unlinkSync(req.file.path)
+
+  console.log("Success")
+
+  res.json({
+   video: finalVideo
+  })
+
+ } catch (error) {
+
+  console.log("Server error:", error.message)
+
+  res.status(500).json({
+   error: error.message
+  })
+
+ }
+
+})
 
 app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
-});
+
+ console.log("Server running on port " + PORT)
+
+})
