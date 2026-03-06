@@ -21,21 +21,19 @@ const replicate = new Replicate({
  auth: process.env.REPLICATE_API_TOKEN
 })
 
-// Cloudinary
+// Cloudinary setup
 cloudinary.v2.config({
  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
  api_key: process.env.CLOUDINARY_API_KEY,
  api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
-// Server test route
+// Server test
 app.get("/", (req, res) => {
-
- res.send("AI Video Maker Server is Live 🚀")
-
+ res.send("AI Video Maker Server Running 🚀")
 })
 
-// Generate video route
+// Generate video
 app.post("/generate", upload.single("image"), async (req, res) => {
 
  try {
@@ -51,14 +49,14 @@ app.post("/generate", upload.single("image"), async (req, res) => {
   const base64Image =
    "data:" + req.file.mimetype + ";base64," + imageBuffer.toString("base64")
 
-  // AI video generation
   console.log("Generating AI Video...")
 
   const output = await replicate.run(
-   "bytedance/seedance-1.0:7372274223363364451950346399432616894982",
+   "minimax/video-01",
    {
     input: {
-     input_image: base64Image
+     prompt: "portrait cinematic motion",
+     image: base64Image
     }
    }
   )
@@ -68,8 +66,6 @@ app.post("/generate", upload.single("image"), async (req, res) => {
   console.log("Video generated:", videoUrl)
 
   // Upload video to Cloudinary
-  console.log("Uploading video to Cloudinary...")
-
   const uploadResult = await cloudinary.v2.uploader.upload(videoUrl, {
    resource_type: "video",
    public_id: "ai_video_" + Date.now()
@@ -77,9 +73,9 @@ app.post("/generate", upload.single("image"), async (req, res) => {
 
   const finalVideo = uploadResult.secure_url
 
-  fs.unlinkSync(req.file.path)
+  console.log("Cloudinary video:", finalVideo)
 
-  console.log("Success")
+  fs.unlinkSync(req.file.path)
 
   res.json({
    video: finalVideo
@@ -98,7 +94,5 @@ app.post("/generate", upload.single("image"), async (req, res) => {
 })
 
 app.listen(PORT, () => {
-
  console.log("Server running on port " + PORT)
-
 })
