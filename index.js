@@ -1,110 +1,120 @@
-import express from "express";
-import multer from "multer";
-import cors from "cors";
-import Replicate from "replicate";
-import dotenv from "dotenv";
-import fs from "fs";
-import { v2 as cloudinary } from "cloudinary";
+require("dotenv").config()
 
-dotenv.config();
+const express = require("express")
+const cors = require("cors")
+const axios = require("axios")
 
-const app = express();
-const upload = multer({ dest: "uploads/" });
+const app = express()
 
-app.use(cors());
-app.use(express.json());
+app.use(cors())
+app.use(express.json())
 
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 5000
 
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN
-});
+// Health check
+app.get("/", (req,res)=>{
 
-// Cloudinary config
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+res.json({
+status:"AI Video Server Running"
+})
 
-app.get("/", (req, res) => {
-  res.send("AI Video Maker Server Running 🚀");
-});
+})
 
-app.post("/generate", upload.single("image"), async (req, res) => {
 
-  try {
+// Generate AI Video
+app.post("/generate-video", async (req,res)=>{
 
-    if (!req.file) {
-      return res.status(400).json({ error: "No image uploaded" });
-    }
+try{
 
-    console.log("Image received");
+const imageUrl = req.body.image
 
-    const imageBuffer = fs.readFileSync(req.file.path);
+if(!imageUrl){
 
-    const base64Image =
-      "data:" + req.file.mimetype + ";base64," + imageBuffer.toString("base64");
+return res.status(400).json({
+error:"Image URL missing"
+})
 
-    console.log("Starting Seedance video generation");
+}
 
-    const prediction = await replicate.predictions.create({
-      model: "bytedance/seedance-1-lite",
-      input: {
-        image: base64Image,
-        prompt: "cinematic motion"
-      }
-    });
+console.log("Image URL:", imageUrl)
 
-    let result = prediction;
 
-    while (result.status !== "succeeded" && result.status !== "failed") {
+// Replicate Seedance Model
+const response = await axios.post(
 
-      console.log("Status:", result.status);
+"https://api.replicate.com/v1/predictions",
 
-      await new Promise(resolve => setTimeout(resolve, 3000));
+{
+version:"seedance_model_version_id",
+input:{
+image:imageUrl
+}
+},
 
-      result = await replicate.predictions.get(result.id);
-    }
+{
+headers:{
+Authorization:`Token ${process.env.REPLICATE_API_TOKEN}`,
+"Content-Type":"application/json"
+}
+}
 
-    if (result.status === "failed") {
-      console.log("AI generation failed");
-      return res.status(500).json({ error: "Video generation failed" });
-    }
+)
 
-    const videoUrl = Array.isArray(result.output)
-      ? result.output[0]
-      : result.output;
+const prediction = response.data
 
-    console.log("Video generated from Replicate:", videoUrl);
+res.json({
 
-    // Upload video to Cloudinary
-    const uploadResponse = await cloudinary.uploader.upload(videoUrl, {
-      resource_type: "video",
-      public_id: "ai_video_" + Date.now()
-    });
+status:"processing",
+id: prediction.id
 
-    console.log("Uploaded to Cloudinary");
+})
 
-    fs.unlinkSync(req.file.path);
+}
+catch(e){
 
-    res.json({
-      status: "success",
-      video_url: uploadResponse.secure_url
-    });
+console.log(e.message)
 
-  } catch (error) {
+res.status(500).json({
+error:"Video generation failed"
+})
 
-    console.log("Server error:", error);
+}
 
-    res.status(500).json({
-      error: "Server error"
-    });
+})
 
-  }
 
-});
+// Check status
+app.get("/status/:id", async (req,res)=>{
 
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
+try{
+
+const id = req.params.id
+
+const response = await axios.get(
+
+`https://api.replicate.com/v1/predictions/${id}`,
+
+{
+headers:{
+Authorization:`Token ${process.env.REPLICATE_API_TOKEN}`
+}
+}
+
+)
+
+res.json(response.data)
+
+}
+catch(e){
+
+res.status(500).json({error:"Status check failed"})
+
+}
+
+})
+
+app.listen(PORT,()=>{
+
+console.log("🚀 AI Video Server Running on port",PORT)
+
+})

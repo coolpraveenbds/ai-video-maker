@@ -1,17 +1,25 @@
 {
-  "name": "ai-video-maker-server",
+  "name": "ai-video-server",
   "version": "1.0.0",
-  "type": "module",
-  "main": "index.js",
+  "description": "AI Video Maker Server using ByteDance Seedance",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
+  "keywords": [
+    "ai-video",
+    "seedance",
+    "bytedance",
+    "cloudinary",
+    "android-api"
+  ],
+  "author": "Dr Praveen Gupta",
+  "license": "ISC",
   "dependencies": {
+    "axios": "^1.7.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1",
-    "replicate": "^0.25.2",
-    "cloudinary": "^1.41.3"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
   }
 }
