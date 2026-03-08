@@ -1,109 +1,94 @@
-require("dotenv").config();
+import express from "express";
+import axios from "axios";
+import cors from "cors";
+import dotenv from "dotenv";
 
-const express = require("express");
-const cors = require("cors");
-const axios = require("axios");
+dotenv.config();
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
-
-// Health check
 app.get("/", (req, res) => {
-  res.json({
-    status: "AI Video Server Running"
-  });
+  res.send("AI Video Server Running");
 });
 
-
-// Generate AI video
 app.post("/generate-video", async (req, res) => {
 
   try {
 
-    const imageUrl = req.body.image;
+    const { image_url } = req.body;
 
-    if (!imageUrl) {
-      return res.status(400).json({
-        error: "Image URL missing"
-      });
+    if (!image_url) {
+      return res.status(400).json({ error: "Image URL missing" });
     }
 
-    console.log("Image received:", imageUrl);
-
-
-    // Replicate API call
     const response = await axios.post(
       "https://api.replicate.com/v1/predictions",
       {
-        version: "seedance_model_version_id",
+        version: "seedance-ai/seedance-1.0",
         input: {
-          image: imageUrl
+          image: image_url
         }
       },
       {
         headers: {
-          Authorization: `Token ${process.env.REPLICATE_API_TOKEN}`,
+          Authorization: `Token ${process.env.REPLICATE_API_KEY}`,
           "Content-Type": "application/json"
         }
       }
     );
 
-
     const prediction = response.data;
 
-    res.json({
-      status: "processing",
-      id: prediction.id
-    });
+    let status = prediction.status;
+    let id = prediction.id;
 
-  } catch (error) {
+    while (status !== "succeeded" && status !== "failed") {
 
-    console.log(error.message);
+      await new Promise(r => setTimeout(r, 4000));
 
-    res.status(500).json({
-      status: "error",
-      message: "Video generation failed"
-    });
-
-  }
-
-});
-
-
-// Check video status
-app.get("/status/:id", async (req, res) => {
-
-  try {
-
-    const id = req.params.id;
-
-    const response = await axios.get(
-      `https://api.replicate.com/v1/predictions/${id}`,
-      {
-        headers: {
-          Authorization: `Token ${process.env.REPLICATE_API_TOKEN}`
+      const poll = await axios.get(
+        `https://api.replicate.com/v1/predictions/${id}`,
+        {
+          headers: {
+            Authorization: `Token ${process.env.REPLICATE_API_KEY}`
+          }
         }
-      }
-    );
+      );
 
-    res.json(response.data);
+      status = poll.data.status;
+
+      if (status === "succeeded") {
+
+        const videoUrl = poll.data.output;
+
+        return res.json({
+          video_url: videoUrl
+        });
+
+      }
+
+      if (status === "failed") {
+        return res.status(500).json({ error: "Video generation failed" });
+      }
+
+    }
 
   } catch (error) {
 
+    console.error(error);
+
     res.status(500).json({
-      error: "Status check failed"
+      error: "Server error"
     });
 
   }
 
 });
-
 
 app.listen(PORT, () => {
-  console.log("🚀 AI Video Server Running on port", PORT);
+  console.log("Server running on port", PORT);
 });

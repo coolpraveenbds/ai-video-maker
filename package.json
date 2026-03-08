@@ -1,19 +1,11 @@
 {
   "name": "ai-video-server",
   "version": "1.0.0",
-  "description": "AI Video Maker Backend using Replicate Seedance",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "keywords": [
-    "ai-video",
-    "seedance",
-    "replicate",
-    "cloudinary"
-  ],
-  "author": "Dr Praveen Gupta",
-  "license": "ISC",
   "dependencies": {
     "axios": "^1.7.2",
     "cors": "^2.8.5",
