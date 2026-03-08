@@ -1,18 +1,16 @@
 {
   "name": "ai-video-server",
   "version": "1.0.0",
-  "description": "AI Video Maker Server using ByteDance Seedance",
-  "main": "server.js",
+  "description": "AI Video Maker Backend using Replicate Seedance",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node index.js"
   },
   "keywords": [
     "ai-video",
     "seedance",
-    "bytedance",
-    "cloudinary",
-    "android-api"
+    "replicate",
+    "cloudinary"
   ],
   "author": "Dr Praveen Gupta",
   "license": "ISC",
