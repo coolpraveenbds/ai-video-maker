@@ -23,21 +23,27 @@ app.post("/generate-video", async (req, res) => {
     const { image_url } = req.body;
 
     if (!image_url) {
-      return res.status(400).json({ error: "Image URL missing" });
+      return res.status(400).json({
+        error: "Image URL missing"
+      });
     }
 
     const REPLICATE_TOKEN = process.env.REPLICATE_API_TOKEN;
 
     if (!REPLICATE_TOKEN) {
-      return res.status(500).json({ error: "Replicate API token missing" });
+      return res.status(500).json({
+        error: "Replicate API token missing"
+      });
     }
 
+    // CREATE PREDICTION
     const createPrediction = await axios.post(
       "https://api.replicate.com/v1/predictions",
       {
-        version: "db21e45a987c6c9d3f9e2f98d1c0a12c",
+        version: "83b3c1f8c6d0c59e9c8a3c6d53295d85f1e4b74e6a1fde37d399a8ce28ed5ab2",
         input: {
-          image: image_url
+          image: image_url,
+          motion: "zoom"
         }
       },
       {
@@ -53,6 +59,7 @@ app.post("/generate-video", async (req, res) => {
     let status = prediction.status;
     let id = prediction.id;
 
+    // WAIT FOR RESULT
     while (status !== "succeeded" && status !== "failed") {
 
       await new Promise(r => setTimeout(r, 4000));
@@ -70,8 +77,10 @@ app.post("/generate-video", async (req, res) => {
 
       if (status === "succeeded") {
 
+        const videoUrl = poll.data.output;
+
         return res.json({
-          video_url: poll.data.output
+          video_url: videoUrl
         });
 
       }
@@ -88,7 +97,7 @@ app.post("/generate-video", async (req, res) => {
 
   } catch (error) {
 
-    console.error(error.response?.data || error.message);
+    console.log(error.response?.data || error.message);
 
     res.status(500).json({
       error: error.response?.data || "Server error"
