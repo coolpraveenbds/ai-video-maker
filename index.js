@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
@@ -25,56 +26,63 @@ app.post("/generate-video", async (req, res) => {
       return res.status(400).json({ error: "Image URL missing" });
     }
 
-    const response = await axios.post(
+    const REPLICATE_TOKEN = process.env.REPLICATE_API_TOKEN;
+
+    if (!REPLICATE_TOKEN) {
+      return res.status(500).json({ error: "Replicate API token missing" });
+    }
+
+    const createPrediction = await axios.post(
       "https://api.replicate.com/v1/predictions",
       {
-        version: "3f0457d0c2a3c0d21c12f1d3a2c5d7f19e6c4db7b3b2d9cfa7a19d8b2f9a7a2e",
+        version: "db21e45a987c6c9d3f9e2f98d1c0a12c",
         input: {
-          image: image_url,
-          motion_bucket_id: 127,
-          fps: 6
+          image: image_url
         }
       },
       {
         headers: {
-          Authorization: `Token ${process.env.REPLICATE_API_KEY}`,
+          Authorization: `Token ${REPLICATE_TOKEN}`,
           "Content-Type": "application/json"
         }
       }
     );
 
-    let prediction = response.data;
+    const prediction = createPrediction.data;
 
-    while (
-      prediction.status !== "succeeded" &&
-      prediction.status !== "failed"
-    ) {
+    let status = prediction.status;
+    let id = prediction.id;
+
+    while (status !== "succeeded" && status !== "failed") {
 
       await new Promise(r => setTimeout(r, 4000));
 
       const poll = await axios.get(
-        `https://api.replicate.com/v1/predictions/${prediction.id}`,
+        `https://api.replicate.com/v1/predictions/${id}`,
         {
           headers: {
-            Authorization: `Token ${process.env.REPLICATE_API_KEY}`
+            Authorization: `Token ${REPLICATE_TOKEN}`
           }
         }
       );
 
-      prediction = poll.data;
-    }
+      status = poll.data.status;
 
-    if (prediction.status === "succeeded") {
+      if (status === "succeeded") {
 
-      return res.json({
-        video_url: prediction.output[0]
-      });
+        return res.json({
+          video_url: poll.data.output
+        });
 
-    } else {
+      }
 
-      return res.status(500).json({
-        error: "Video generation failed"
-      });
+      if (status === "failed") {
+
+        return res.status(500).json({
+          error: "Video generation failed"
+        });
+
+      }
 
     }
 
@@ -83,7 +91,7 @@ app.post("/generate-video", async (req, res) => {
     console.error(error.response?.data || error.message);
 
     res.status(500).json({
-      error: "Server error"
+      error: error.response?.data || "Server error"
     });
 
   }
